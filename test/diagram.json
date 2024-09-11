@@ -1,43 +1,58 @@
 {
-    "version": 1,
-    "author": "Henoshan Athimoolanathan",
-    "editor": "wokwi",
-    "parts": [
-      { "type": "wokwi-arduino-uno", "id": "uno", "top": 125.4, "left": -106.2, "attrs": {} },
-      { "type": "wokwi-analog-joystick", "id": "joystick1", "top": -87, "left": -61.8, "attrs": {} },
-      { "type": "wokwi-ili9341", "id": "lcd1", "top": -220, "left": 143.7, "attrs": {} },
-      {
-        "type": "wokwi-resistor",
-        "id": "r1",
-        "top": 215.15,
-        "left": 192,
-        "attrs": { "value": "220" }
-      },
-      {
-        "type": "wokwi-buzzer",
-        "id": "bz1",
-        "top": 88.8,
-        "left": 299.4,
-        "attrs": { "volume": "0.1" }
-      }
-    ],
-    "connections": [
-      [ "lcd1:VCC", "uno:5V", "red", [ "v220.8", "h-138.2" ] ],
-      [ "lcd1:GND", "uno:GND.2", "black", [ "v230.4", "h-138.3" ] ],
-      [ "lcd1:CS", "uno:10", "green", [ "v9.6", "h-163.9" ] ],
-      [ "lcd1:RST", "uno:9", "green", [ "v28.8", "h-164" ] ],
-      [ "lcd1:D/C", "uno:8", "green", [ "v38.4", "h-163.6" ] ],
-      [ "lcd1:MOSI", "uno:11", "green", [ "v19.2", "h-202.21" ] ],
-      [ "lcd1:SCK", "uno:13", "green", [ "v48", "h-230.81" ] ],
-      [ "lcd1:LED", "r1:2", "green", [ "v0" ] ],
-      [ "r1:1", "uno:5V", "green", [ "h-9.6", "v57.6", "h-128.6" ] ],
-      [ "joystick1:VCC", "uno:5V", "red", [ "v192", "h53.8" ] ],
-      [ "joystick1:GND", "uno:GND.1", "black", [ "v38.4", "h-29.1" ] ],
-      [ "joystick1:HORZ", "uno:A0", "green", [ "v182.4", "h111.4" ] ],
-      [ "joystick1:VERT", "uno:A1", "green", [ "v172.8", "h130.5" ] ],
-      [ "joystick1:SEL", "uno:7", "green", [ "v28.8", "h82.8" ] ],
-      [ "bz1:2", "uno:6", "green", [ "v19.2", "h-244.1" ] ],
-      [ "bz1:1", "uno:GND.1", "black", [ "v9.6", "h-316.8", "h0", "v-48" ] ]
-    ],
-    "dependencies": {}
-  }
+  "version": 1,
+  "author": "Henoshan Athimoolanathan",
+  "editor": "wokwi",
+  "parts": [
+    { "type": "wokwi-arduino-uno", "id": "uno", "top": 135, "left": -106.2, "attrs": {} },
+    {
+      "type": "wokwi-analog-joystick",
+      "id": "joystick1",
+      "top": 437.4,
+      "left": -2.8,
+      "rotate": 180,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-ili9341",
+      "id": "lcd1",
+      "top": -215.4,
+      "left": 30.5,
+      "rotate": 90,
+      "attrs": {}
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r1",
+      "top": 205,
+      "left": -183.25,
+      "rotate": 270,
+      "attrs": { "value": "220" }
+    },
+    {
+      "type": "wokwi-buzzer",
+      "id": "bz1",
+      "top": 165.6,
+      "left": 232.2,
+      "attrs": { "volume": "0.1" }
+    }
+  ],
+  "connections": [
+    [ "lcd1:VCC", "uno:5V", "red", [ "h-153.6", "v470.4", "h226.6" ] ],
+    [ "lcd1:GND", "uno:GND.2", "black", [ "h-144", "v451.2", "h226.5" ] ],
+    [ "lcd1:CS", "uno:10", "green", [ "h-67.2", "v163.2", "h133.7" ] ],
+    [ "lcd1:RST", "uno:9", "green", [ "h-48", "v134.4", "h124" ] ],
+    [ "lcd1:D/C", "uno:8", "green", [ "h-38.4", "v115.2", "h124.4" ] ],
+    [ "lcd1:MOSI", "uno:11", "green", [ "h-57.6", "v124.79", "h115.2", "v76.8" ] ],
+    [ "lcd1:SCK", "uno:13", "green", [ "h-76.8", "v134.39", "h114.8" ] ],
+    [ "lcd1:LED", "r1:2", "green", [ "h-134.4", "v219.59" ] ],
+    [ "r1:1", "uno:5V", "green", [ "v105.6", "h207.4" ] ],
+    [ "joystick1:VCC", "uno:5V", "red", [ "v-28.8", "h-13.4" ] ],
+    [ "joystick1:HORZ", "uno:A0", "blue", [ "v-48", "h53.8" ] ],
+    [ "joystick1:SEL", "uno:7", "green", [ "v-57.6", "h153.6", "v-259.2", "h-109.2" ] ],
+    [ "joystick1:GND", "uno:GND.3", "black", [ "v-67.2", "h44" ] ],
+    [ "bz1:1", "uno:GND.3", "black", [ "v124.8", "h-186.4" ] ],
+    [ "joystick1:VERT", "uno:A1", "blue", [ "v-38.4", "h57.6" ] ],
+    [ "bz1:2", "uno:6", "yellow", [ "v28.8", "h38", "v-163.2", "h-220.8" ] ]
+  ],
+  "dependencies": {}
+}
