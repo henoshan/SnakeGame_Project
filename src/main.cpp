@@ -10,6 +10,7 @@
 #define JOYSTICK_X A0 // Joystick X-axis
 #define JOYSTICK_Y A1 // Joystick Y-axis
 #define JOYSTICK_BUTTON 3 // Joystick button
+#define Buzzer 6
 
 #define HS_Add 0 // high score address
 
@@ -18,14 +19,23 @@ Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC, TFT_RST);
 // Global variables
 int selectedOption = 0;  // 0: New Game, 1: High Score
 //Game variables
-int snakeX[100], snakeY[100]; // Snake body positions
-int snakeLength = 2; // Start with length of 2
-int snakeDir = 1;
+int snakeX[100], snakeY[100]; // for storing Snake body positions
+int snakeLength = 2; // initial snake length = 2
+int snakeDir = 3;  // intial snake direction left
 int joyX, joyY;
 int foodX, foodY; // Food position
-int Food = 0;
-int score = 0;
+int Food = 0;  // food spawned
+int score = 0; // count game score
 int gameEnded = 0; //flat for game over
+int Level = 1;         // Initial game level
+int goodFoodEaten = 0; // Tracks good food eaten
+int badFoodFlag = 0; //tracks generation of bad food
+int speed=100; // initial snake speed
+int redFood=1;
+int red= redFood; // number of red foods for the level
+unsigned long foodSpawnTime = 0;  // track food spawn time
+int countdown = 5;                // Countdown starts from 5
+bool foodVisible = true;          // To track if food is currently visible
 
 const int screenWidth = 320; //in pixels
 const int screenHeight = 240; // in pixels
@@ -46,6 +56,10 @@ void moveSnake();
 void checkCollision();
 void displayScore();
 void gameOver();
+void showHighscore();
+void levelCheck();
+void checkFoodTimeout();
+void displayCountdown(int timeLeft);
 
 void setup() {
   Serial.begin(9600);  // Start serial communication
@@ -57,7 +71,7 @@ void setup() {
 
   // Seed the random number generator with a value from an unconnected analog pin
   randomSeed(analogRead(A3));
-
+  EEPROM.put(HS_Add,0);  // To reset the high score value initially
   // Draw the initial menu screen
   drawMenu();
 }
@@ -65,18 +79,17 @@ void setup() {
 void loop() {
   // Handle joystick movement for menu navigation
   handleJoystickInput();
-
   // Handle joystick button press for selection
   if (digitalRead(JOYSTICK_BUTTON) == LOW) {
     while (digitalRead(JOYSTICK_BUTTON) == LOW);  // Wait for button release
     if (selectedOption == 0) {
       Serial.println("Game Started"); // Start game function
       newGame();
-      delay(2000);
+      delay(3000);  // hold the game over for 3 seconds
       tft.fillScreen(ILI9341_BLACK); // clean the display
       drawMenu(); // draw menu when exiting the game
     } else if (selectedOption == 1) {
-      Serial.println("Showing High Score"); // Show high score for 3 seconds
+      showHighscore();
     }
   }
   delay(100);
@@ -86,11 +99,11 @@ void handleJoystickInput(void) {
   int yValue = analogRead(JOYSTICK_Y);
 
   // Detect movement up or down
-  if ((yValue > 600 ) & (selectedOption != 1)) { // Move to "High Score" only if not already selected
+  if ((yValue < 400 ) & (selectedOption != 1)) { // Move to "High Score" only if not already selected
       selectedOption = 1;
       drawMenu();
       // delay(200); // Debounce
-  } else if ((yValue < 400) &(selectedOption != 0)) { // Move to "New Game" only if not already selected
+  } else if ((yValue > 600) &(selectedOption != 0)) { // Move to "New Game" only if not already selected
       selectedOption = 0;
       drawMenu();
       // delay(200); // Debounce
@@ -119,34 +132,7 @@ void drawMenu(void) {
   tft.println("High Score");
 }
 
-// void updateMenu() {
-//   // Change the color of the previously selected option to white
-//   if (lastSelectedOption == 0) {
-//     tft.setTextColor(ILI9341_WHITE);
-//     tft.setTextSize(4);
-//     tft.setCursor(40, 60);
-//     tft.println("New Game");
-//   } else if (lastSelectedOption == 1) {
-//     tft.setTextColor(ILI9341_WHITE);
-//     tft.setTextSize(4);
-//     tft.setCursor(40, 160);
-//     tft.println("High Score");
-//   }
-
-//   // Highlight the newly selected option
-//   if (selectedOption == 0) {
-//     tft.setTextColor(ILI9341_YELLOW);
-//     tft.setTextSize(4);
-//     tft.setCursor(40, 60);
-//     tft.println("New Game");
-//   } else if (selectedOption == 1) {
-//     tft.setTextColor(ILI9341_YELLOW);
-//     tft.setTextSize(4);
-//     tft.setCursor(40, 160);
-//     tft.println("High Score");
-//   }
-// }
-void newGame(void){
+void newGame(){
   tft.fillScreen(ILI9341_BLACK);
   for (int i = 0; i < snakeLength; i++) {
     snakeX[i] = screenWidth / 2 - i * 10;
@@ -159,21 +145,56 @@ void newGame(void){
     readJoystick();
     moveSnake();
     checkCollision();
-    delay(100); // Controls speed
+    checkFoodTimeout(); // for counter
+    levelCheck();
+    delay(speed); // Controls speed
+  }
+}
+void levelCheck(void){
+  if(goodFoodEaten==2){
+    Level++;
+    goodFoodEaten=0;
+    redFood++;
+    red= redFood; // number of red foods for the level
+    Serial.print(Level);
+    // if(Level>4){
+    //   // change snake speed increase by 20%
+    //   speed-=10;
+    // }
+  }
+
+}
+void checkFoodTimeout() {
+  if (Level >= 3 && foodVisible) {
+    unsigned long currentTime = millis();
+    
+    // Calculate time elapsed since the food was spawned
+    unsigned long elapsedTime = (currentTime - foodSpawnTime) / 1000;  // in seconds
+    
+    if (elapsedTime >= 1 && elapsedTime <= 5) {
+      countdown = 5 - elapsedTime;
+      displayCountdown(countdown);  // Update the countdown
+    }
+    
+    // If 5 seconds have passed, remove the food
+    if (elapsedTime >= 5) {
+      tft.fillRect(foodX, foodY, 10, 10, ILI9341_BLACK);  // Remove the food
+      foodVisible = false;
+    }
   }
 }
 void readJoystick(void) {
   joyX = analogRead(JOYSTICK_X);
   joyY = analogRead(JOYSTICK_Y);
 
-  if (joyX < 400 && snakeDir != 1) {
-    snakeDir = 3; // Left
-  } else if (joyX > 600 && snakeDir != 3) {
-    snakeDir = 1; // Right
-  } else if (joyY < 400 && snakeDir != 2) {
-    snakeDir = 0; // Up
-  } else if (joyY > 600 && snakeDir != 0) {
-    snakeDir = 2; // Down
+  if (joyX < 400 && snakeDir != 3) {
+    snakeDir = 1; // right
+  } else if (joyX > 600 && snakeDir != 1) {
+    snakeDir = 3; // left
+  } else if (joyY < 400 && snakeDir != 0) {
+    snakeDir = 2; // down
+  } else if (joyY > 600 && snakeDir != 2) {
+    snakeDir = 0; // up
   }
 }
 void spawnFood(void) {
@@ -189,21 +210,40 @@ void spawnFood(void) {
     
     // Check if the food is in the score display area (top-right corner)
     bool isInScoreArea = (foodX >= 200 && foodX <= 300 && foodY >= 0 && foodY <= 20);
+
+    // check if food is placed on or near the barrier
+    bool onBarrier;
     
-    // Place food, if it's not on the snake's head and not in the score area
-    if (!isOnHead && !isInScoreArea) {
+    // Place food, if it's not on the snake's head, not in the score area, and not on the barrier
+    if ((!isOnHead) && (!isInScoreArea) && (Level==1)) {
       //foodPlaced 
       foodPlaced = true;
       drawFood();
       Food++;
-      // Serial.println("Food Coordinates: (" + String(foodX) + ", " + String(foodY) + "), " + String(Food));
-
+    }else if ((!isOnHead) && (!isInScoreArea) && (!onBarrier) && (Level>1)){
+      //foodPlaced 
+      foodPlaced = true;
+      drawFood();
+      Food++;
     }
   }
 }
 
 void drawFood(void){
-  tft.fillRect(foodX, foodY, 10, 10, ILI9341_GREEN);
+  // until level 4 good food
+  if(Level<4){
+    tft.fillRect(foodX, foodY, 10, 10, ILI9341_GREEN); //goodfood
+  }else{ // randomly generate red,green food
+    int r = random(1,3); // randomly generates 1 or 2
+    if((r==1) && (red>0)){
+      tft.fillRect(foodX, foodY, 10, 10, ILI9341_RED); //badfood
+      badFoodFlag = 1;
+      red--;
+    }else{
+      tft.fillRect(foodX, foodY, 10, 10, ILI9341_GREEN); //goodfood
+    }
+  }
+  foodVisible = true;
 }
 
 void drawSnake(void) {
@@ -241,10 +281,10 @@ void moveSnake(void) {
     if (snakeX[0] >=ScoreBoundaryX) snakeX[0] = 0;
     if (snakeX[0] < 0) snakeX[0] = ScoreBoundaryX - 10;
   }
-  if((snakeX[0] <= ScoreBoundaryX)){
+  if((snakeX[0] < ScoreBoundaryX)){
     if (snakeY[0] >= screenHeight) snakeY[0] = 0;
     if (snakeY[0] < 0) snakeY[0] = screenHeight - 10;
-  }else if((snakeX[0] > ScoreBoundaryX) && (snakeDir==0 || snakeDir==2)){
+  }else if((snakeX[0] >= ScoreBoundaryX) && (snakeDir==0 || snakeDir==2)){
     if (snakeY[0] >=screenHeight) snakeY[0] = ScoreBoundaryY;
     if (snakeY[0] < ScoreBoundaryY) snakeY[0] = screenHeight - 10;
   }
@@ -252,17 +292,22 @@ void moveSnake(void) {
 }
 
 void checkCollision(void) {
-  // Check if the snake eats food
-  if (snakeX[0] == foodX && snakeY[0] == foodY) {
-    // Increase snake length
-    snakeLength++;
-    score++;
-    displayScore();
-    // Remove the current food from the display
-    tft.fillRect(foodX, foodY, 10, 10, ILI9341_BLACK);
-    // Spawn new food
-    spawnFood();
-    // drawFood();
+  // Check if the snake eats good food
+  if (snakeX[0] == foodX && snakeY[0] == foodY && foodVisible) {
+    if(badFoodFlag ==1){
+      snakeLength--; // reduce snake length
+      score--; // reduce score
+      displayScore();
+      tft.fillRect(foodX, foodY, 10, 10, ILI9341_BLACK); // Remove the current food from the display
+      spawnFood(); // Spawn new food
+    }else{
+      snakeLength++;// Increase snake length
+      score++; // Increase score
+      displayScore();
+      goodFoodEaten++; // increase good food eaten flag
+      tft.fillRect(foodX, foodY, 10, 10, ILI9341_BLACK); // Remove the current food from the display
+      spawnFood(); // Spawn new food
+    }
   }
   // Check if the snake eats itself
   for (int i = 1; i < snakeLength; i++) {
@@ -270,23 +315,67 @@ void checkCollision(void) {
       gameOver();
     }
   }
+  // check if snake head hits the barrier
+
 }
 
 void displayScore(void) {
   tft.setCursor(210, 0);
-  tft.setTextColor(ILI9341_WHITE);
+  tft.setTextColor(ILI9341_WHITE,ILI9341_BLACK);
   tft.setTextSize(2);
-  tft.fillRect(210, 0, 100, 20, ILI9341_BLACK);
+  // tft.fillRect(210, 0, 100, 20, ILI9341_YELLOW);
   tft.print("Score ");
   tft.print(score);
 }
 
 void gameOver(void) {
-  tft.fillScreen(ILI9341_RED);
-  tft.setCursor(50, 150);
-  tft.setTextColor(ILI9341_WHITE);
-  tft.setTextSize(3);
-  tft.println("Game Over!!");
+  int highScore;
+  // Show Game over
+  tft.fillScreen(ILI9341_BLACK);
+  tft.setCursor(90, 70);
+  tft.setTextColor(ILI9341_RED);
+  tft.setTextSize(5);
+  tft.println("GAME");
 
+  tft.setCursor(90, 120);
+  tft.setTextColor(ILI9341_RED);
+  tft.setTextSize(5);
+  tft.println("OVER");
+
+  if(score>EEPROM.get(HS_Add,highScore)){
+    EEPROM.put(HS_Add,score);
+  }
   gameEnded=1;
+}
+void showHighscore(){
+  int highScore;
+  int cursor; 
+  EEPROM.get(HS_Add,highScore);
+  tft.fillScreen(ILI9341_BLACK);
+    // Set the text properties for the "High Score" label
+  tft.setTextColor(ILI9341_WHITE);  // White color for the label
+  tft.setTextSize(4);               // Set text size
+  tft.setCursor(40, 80);            // Set position for "High Score" label
+  tft.println("High Score");
+  if(highScore>99){
+    cursor = 120;
+  }else if((highScore <= 99) && (highScore>9)){
+    cursor = 135;
+  }else cursor = 150;
+  // Set the text properties for the actual score (in red)
+  tft.setTextColor(ILI9341_RED);    // Red color for the score
+  tft.setTextSize(4);               // Set text size
+  tft.setCursor(cursor, 140);           // Set position for the actual score
+  tft.println(highScore);           // Display the high score
+  
+  delay(3000); // wait for 3s and return to main menu
+  tft.fillScreen(ILI9341_BLACK); // clean the display
+  drawMenu(); // draw menu 
+
+}
+void displayCountdown(int timeLeft) {
+  tft.setTextColor(ILI9341_YELLOW, ILI9341_BLACK);  // yellow text, black background
+  tft.setTextSize(2);
+  tft.setCursor(0, 0);  // Position the countdown in the corner
+  tft.print(timeLeft);
 }
