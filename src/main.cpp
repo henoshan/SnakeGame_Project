@@ -17,30 +17,31 @@
 Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC, TFT_RST);
 
 // Global variables
-int selectedOption = 0;  // 0: New Game, 1: High Score
+int selectedOption = 0;  // New Game-0,High Score-1
 //Game variables
 int snakeX[100], snakeY[100]; // for storing Snake body positions
 int snakeLength = 2; // initial snake length = 2
-int snakeDir = 3;  // intial snake direction left
-int joyX, joyY;
-int foodX, foodY; // Food position
-int Food = 0;  // food spawned
+int snakeDir = 3;  // intial snake direction (left)
+int joyX, joyY;  // read joystick x,y values
+int foodX, foodY; // storing food position
+int Food = 0;  // no of food spawned
 int score = 0; // count game score
-int gameEnded = 0; //flat for game over
+bool gameEnded = false; //flag for game over
 int Level = 1;         // Initial game level
 int goodFoodEaten = 0; // Tracks good food eaten
-int badFoodFlag = 0; //tracks generation of bad food
-int speed=100; // initial snake speed
-int redFood=1;
-int red= redFood; // number of red foods for the level
-unsigned long foodSpawnTime = 0;  // track food spawn time
+bool foodPlaced = false;      //tracking food placement
+bool badFoodFlag = false; //Tracks generation of bad food
+int speed=100; // Initial snake speed
+int redFood=0; // To set the redfood appearing per level
+int red; // to control the number of red foods for the level
+unsigned long foodSpawnTime ;  // Track food spawn time
 int countdown = 5;                // Countdown starts from 5
-bool foodVisible = true;          // To track if food is currently visible
 
 const int screenWidth = 320; //in pixels
 const int screenHeight = 240; // in pixels
-const int ScoreBoundaryX = 210;
+const int ScoreBoundaryX = 210; // scorecard boundart (to stop snake from entering scorecard)
 const int ScoreBoundaryY = 20;
+const unsigned long foodTimeout = 5000; // Food disappears after 5 seconds
 
 //Function Prototypes
 // for menu
@@ -51,6 +52,7 @@ void newGame();
 void readJoystick(); 
 void spawnFood();
 void drawFood();
+void clearFood();
 void drawSnake();
 void moveSnake();
 void checkCollision();
@@ -84,6 +86,7 @@ void loop() {
     while (digitalRead(JOYSTICK_BUTTON) == LOW);  // Wait for button release
     if (selectedOption == 0) {
       Serial.println("Game Started"); // Start game function
+      gameEnded = false;
       newGame();
       delay(3000);  // hold the game over for 3 seconds
       tft.fillScreen(ILI9341_BLACK); // clean the display
@@ -94,7 +97,7 @@ void loop() {
   }
   delay(100);
 }
-
+// no change needed functions//
 void handleJoystickInput(void) {
   int yValue = analogRead(JOYSTICK_Y);
 
@@ -109,7 +112,6 @@ void handleJoystickInput(void) {
       // delay(200); // Debounce
   }
 }
-
 void drawMenu(void) {
   // Draw "New Game" option (initial rendering)
   if (selectedOption == 0) {
@@ -131,58 +133,6 @@ void drawMenu(void) {
   tft.setCursor(40, 160);  // Position for "High Score" (bottom half)
   tft.println("High Score");
 }
-
-void newGame(){
-  tft.fillScreen(ILI9341_BLACK);
-  for (int i = 0; i < snakeLength; i++) {
-    snakeX[i] = screenWidth / 2 - i * 10;
-    snakeY[i] = screenHeight / 2;
-  }
-  spawnFood();
-  displayScore();
-
-  while(!gameEnded){
-    readJoystick();
-    moveSnake();
-    checkCollision();
-    checkFoodTimeout(); // for counter
-    levelCheck();
-    delay(speed); // Controls speed
-  }
-}
-void levelCheck(void){
-  if(goodFoodEaten==2){
-    Level++;
-    goodFoodEaten=0;
-    redFood++;
-    red= redFood; // number of red foods for the level
-    Serial.print(Level);
-    // if(Level>4){
-    //   // change snake speed increase by 20%
-    //   speed-=10;
-    // }
-  }
-
-}
-void checkFoodTimeout() {
-  if (Level >= 3 && foodVisible) {
-    unsigned long currentTime = millis();
-    
-    // Calculate time elapsed since the food was spawned
-    unsigned long elapsedTime = (currentTime - foodSpawnTime) / 1000;  // in seconds
-    
-    if (elapsedTime >= 1 && elapsedTime <= 5) {
-      countdown = 5 - elapsedTime;
-      displayCountdown(countdown);  // Update the countdown
-    }
-    
-    // If 5 seconds have passed, remove the food
-    if (elapsedTime >= 5) {
-      tft.fillRect(foodX, foodY, 10, 10, ILI9341_BLACK);  // Remove the food
-      foodVisible = false;
-    }
-  }
-}
 void readJoystick(void) {
   joyX = analogRead(JOYSTICK_X);
   joyY = analogRead(JOYSTICK_Y);
@@ -197,55 +147,10 @@ void readJoystick(void) {
     snakeDir = 0; // up
   }
 }
-void spawnFood(void) {
-  bool foodPlaced = false;
-  
-  while (!foodPlaced) {
-    // Randomly generate food coordinates
-    foodX = random(0, screenWidth / 10) * 10;
-    foodY = random(0, screenHeight/ 10) * 10;
-    
-    // Check if the food is on the snake's head
-    bool isOnHead = (snakeX[0] == foodX && snakeY[0] == foodY);
-    
-    // Check if the food is in the score display area (top-right corner)
-    bool isInScoreArea = (foodX >= 200 && foodX <= 300 && foodY >= 0 && foodY <= 20);
-
-    // check if food is placed on or near the barrier
-    bool onBarrier;
-    
-    // Place food, if it's not on the snake's head, not in the score area, and not on the barrier
-    if ((!isOnHead) && (!isInScoreArea) && (Level==1)) {
-      //foodPlaced 
-      foodPlaced = true;
-      drawFood();
-      Food++;
-    }else if ((!isOnHead) && (!isInScoreArea) && (!onBarrier) && (Level>1)){
-      //foodPlaced 
-      foodPlaced = true;
-      drawFood();
-      Food++;
-    }
-  }
+void clearFood() {
+  tft.fillRect(foodX, foodY, 10, 10, ILI9341_BLACK);
+  foodPlaced = false; // no food on display
 }
-
-void drawFood(void){
-  // until level 4 good food
-  if(Level<4){
-    tft.fillRect(foodX, foodY, 10, 10, ILI9341_GREEN); //goodfood
-  }else{ // randomly generate red,green food
-    int r = random(1,3); // randomly generates 1 or 2
-    if((r==1) && (red>0)){
-      tft.fillRect(foodX, foodY, 10, 10, ILI9341_RED); //badfood
-      badFoodFlag = 1;
-      red--;
-    }else{
-      tft.fillRect(foodX, foodY, 10, 10, ILI9341_GREEN); //goodfood
-    }
-  }
-  foodVisible = true;
-}
-
 void drawSnake(void) {
   // Draw the head
   tft.fillRect(snakeX[0], snakeY[0], 10, 10, ILI9341_WHITE);
@@ -254,7 +159,6 @@ void drawSnake(void) {
     tft.fillRect(snakeX[i], snakeY[i], 10, 10, ILI9341_BLUE);
   }
 }
-
 void moveSnake(void) {
   // Erase the tail  from the display
   tft.fillRect(snakeX[snakeLength - 1], snakeY[snakeLength - 1], 10, 10, ILI9341_BLACK);
@@ -290,35 +194,6 @@ void moveSnake(void) {
   }
   drawSnake();
 }
-
-void checkCollision(void) {
-  // Check if the snake eats good food
-  if (snakeX[0] == foodX && snakeY[0] == foodY && foodVisible) {
-    if(badFoodFlag ==1){
-      snakeLength--; // reduce snake length
-      score--; // reduce score
-      displayScore();
-      tft.fillRect(foodX, foodY, 10, 10, ILI9341_BLACK); // Remove the current food from the display
-      spawnFood(); // Spawn new food
-    }else{
-      snakeLength++;// Increase snake length
-      score++; // Increase score
-      displayScore();
-      goodFoodEaten++; // increase good food eaten flag
-      tft.fillRect(foodX, foodY, 10, 10, ILI9341_BLACK); // Remove the current food from the display
-      spawnFood(); // Spawn new food
-    }
-  }
-  // Check if the snake eats itself
-  for (int i = 1; i < snakeLength; i++) {
-    if (snakeX[0] == snakeX[i] && snakeY[0] == snakeY[i]) {
-      gameOver();
-    }
-  }
-  // check if snake head hits the barrier
-
-}
-
 void displayScore(void) {
   tft.setCursor(210, 0);
   tft.setTextColor(ILI9341_WHITE,ILI9341_BLACK);
@@ -327,7 +202,6 @@ void displayScore(void) {
   tft.print("Score ");
   tft.print(score);
 }
-
 void gameOver(void) {
   int highScore;
   // Show Game over
@@ -345,7 +219,6 @@ void gameOver(void) {
   if(score>EEPROM.get(HS_Add,highScore)){
     EEPROM.put(HS_Add,score);
   }
-  gameEnded=1;
 }
 void showHighscore(){
   int highScore;
@@ -379,3 +252,145 @@ void displayCountdown(int timeLeft) {
   tft.setCursor(0, 0);  // Position the countdown in the corner
   tft.print(timeLeft);
 }
+
+// no editing needed for now
+void drawFood(void){
+  // until level 4 good food
+  if(Level<4){
+    tft.fillRect(foodX, foodY, 10, 10, ILI9341_GREEN); //goodfood
+  }else{ // randomly generate red,green food
+    int r = random(1,3); // randomly generates 1 or 2
+    if((r==1) && (red>0)){
+      tft.fillRect(foodX, foodY, 10, 10, ILI9341_RED); //badfood
+      badFoodFlag = true;
+      red--;
+    }else{
+      tft.fillRect(foodX, foodY, 10, 10, ILI9341_GREEN); //goodfood
+    }
+  }
+} 
+void levelCheck(void){
+  if(goodFoodEaten==2){
+    Level++;
+    goodFoodEaten=0;
+    if(Level>=4){
+      redFood++;
+      red= redFood; // number of red foods for the level
+    }
+    // Serial.print(Level);
+    // if(Level>4){
+    //   // change snake speed increase by 20%
+    //   speed-=10;
+    // }
+  }
+}
+
+// need editing
+void newGame(){
+  tft.fillScreen(ILI9341_BLACK);
+  for (int i = 0; i < snakeLength; i++) {
+    snakeX[i] = screenWidth / 2 - i * 10;
+    snakeY[i] = screenHeight / 2;
+  }
+  spawnFood();
+  displayScore();
+
+  while(!gameEnded && (snakeLength>0) && (score>=0)){
+    readJoystick();
+    moveSnake();
+    checkCollision();
+    levelCheck();
+  // Check if 5 seconds have passed since the food was spawned (red and green)
+  if ((millis() - foodSpawnTime >= foodTimeout) && (Level>=3) && (foodPlaced)) {   //  && (foodPlaced)
+    clearFood();  // Remove the current food
+    spawnFood();  // Spawn new food
+  }
+    // checkFoodTimeout(); // for counter
+    delay(speed); // Controls speed
+  }
+  gameOver();
+}
+void spawnFood(void) {  
+  while (!foodPlaced) {
+    // Randomly generate food coordinates
+    foodX = random(0, screenWidth / 10) * 10;
+    foodY = random(0, screenHeight/ 10) * 10;
+    
+    // Check if the food is on the snake's head
+    bool isOnHead = (snakeX[0] == foodX && snakeY[0] == foodY);
+    
+    // Check if the food is in the score display area (top-right corner)
+    bool isInScoreArea = (foodX >= 200 && foodX <= 300 && foodY >= 0 && foodY <= 20);
+
+    // check if food is placed on or near the barrier
+    bool onBarrier = false;
+    
+    // Place food, if it's not on the snake's head, not in the score area, and not on the barrier
+    if ((!isOnHead) && (!isInScoreArea) && (Level==1)) {
+      //foodPlaced 
+      foodPlaced = true;
+      drawFood();
+      Food++;   // not needed just for testing
+    }else if ((!isOnHead) && (!isInScoreArea) && (!onBarrier) && (Level>1)){
+      //foodPlaced 
+      drawFood();
+      foodSpawnTime = millis(); // condition is checked only igf Level>=3
+      foodPlaced = true;
+      Food++;
+    }
+  }
+}  // edit after adding the barrier
+
+void checkCollision(void) {
+  // Check if the snake eats good food
+  if (snakeX[0] == foodX && snakeY[0] == foodY) {
+    if(badFoodFlag==true){
+    // reduce snake length
+      tft.fillRect(snakeX[snakeLength - 1], snakeY[snakeLength - 1], 10, 10, ILI9341_BLACK);
+      snakeLength--;
+      score--; // reduce score
+      displayScore();
+      clearFood();  // Remove the current food
+      foodSpawnTime=0;
+      badFoodFlag=false;
+      spawnFood(); // Spawn new food
+    }else{
+      snakeLength++;// Increase snake length
+      score++; // Increase score
+      displayScore();
+      clearFood();  // Remove the current food
+  
+      goodFoodEaten++; // increase good food eaten flag
+      spawnFood(); // Spawn new food
+    }
+  }
+  // Check if the snake eats itself
+  for (int i = 1; i < snakeLength; i++) {
+    if (snakeX[0] == snakeX[i] && snakeY[0] == snakeY[i]) {
+      gameEnded=true;
+      gameOver();
+    }
+  }
+  // check if snake head hits the barrier
+
+} // edit after adding the barrier
+// void checkFoodTimeout() {
+//   if (Level >= 3 && foodPlaced) {
+//     unsigned long currentTime = millis();
+    
+//     // Calculate time elapsed since the food was spawned
+//     unsigned long elapsedTime = (currentTime - foodSpawnTime) ;  // in milliseconds
+    
+//     if (elapsedTime >= 1 && elapsedTime <= 5000) {
+//       countdown = 5 - (elapsedTime/1000);
+//       displayCountdown(countdown);  // Update the countdown
+//     }
+    
+//     // If 5 seconds have passed, remove the food
+//     if (elapsedTime >= 5000) {
+//       tft.fillRect(foodX, foodY, 10, 10, ILI9341_BLACK);  // Remove the food
+//       foodVisible = false;
+//       spawnFood(); // spwan new food after dissappearing
+//     }
+//   }
+// }  // check this function may not need it/ edit and change
