@@ -24,7 +24,7 @@ int snakeLength = 2; // initial snake length = 2
 int snakeDir = 3;  // intial snake direction (left)
 int joyX, joyY;  // read joystick x,y values
 int foodX, foodY; // storing food position
-int Food = 0;  // no of food spawned
+int Food = 0;  // no.of food spawned
 int score = 0; // count game score
 bool gameEnded = false; //flag for game over
 int Level = 1;         // Initial game level
@@ -39,7 +39,7 @@ const int maxCountTime = 5;                // maximum Countdown time  5 seconds
 
 const int screenWidth = 320; //in pixels
 const int screenHeight = 240; // in pixels
-const int ScoreBoundaryX = 210; // scorecard boundart (to stop snake from entering scorecard)
+const int ScoreBoundaryX = 210; // scorecard boundary (to stop snake from entering scorecard)
 const int ScoreBoundaryY = 20;
 const unsigned long foodTimeout = 5000; // Food disappears after 5 seconds
 
@@ -62,6 +62,9 @@ void showHighscore();
 void levelCheck();
 void checkFoodTimeout();
 void displayCountdown(int timeLeft);
+// test
+void shiftSnake();
+void drawBarrier();
 
 void setup() {
   Serial.begin(9600);  // Start serial communication
@@ -114,6 +117,10 @@ void handleJoystickInput(void) {
   }
 }
 void drawMenu(void) {
+
+    // Draw a red border around the entire screen 
+  tft.drawRect(0, 0, tft.width()-20, tft.height(), ILI9341_RED);
+  tft.drawRect(0, 0, tft.width()-20, tft.height()/2, ILI9341_RED);
   // Draw "New Game" option (initial rendering)
   if (selectedOption == 0) {
     tft.setTextColor(ILI9341_YELLOW);
@@ -121,7 +128,7 @@ void drawMenu(void) {
     tft.setTextColor(ILI9341_WHITE);
   }
   tft.setTextSize(4);
-  tft.setCursor(40, 60);  // Position for "New Game" (top half)
+  tft.setCursor(55, 45);  // Position for "New Game" (top half)
   tft.println("New Game");
 
   // Draw "High Score" option (initial rendering)
@@ -131,7 +138,7 @@ void drawMenu(void) {
     tft.setTextColor(ILI9341_WHITE);
   }
   tft.setTextSize(4);
-  tft.setCursor(40, 160);  // Position for "High Score" (bottom half)
+  tft.setCursor(35, 165);  // Position for "High Score" (bottom half)
   tft.println("High Score");
 }
 void readJoystick(void) {
@@ -222,8 +229,22 @@ void displayScore(void) {
 }
 void gameOver(void) {
   int highScore;
+  if(score > EEPROM.get(HS_Add,highScore)){ // update highscore to EEPROM
+    EEPROM.put(HS_Add,score);
+  }
+  score=0;  // reset game variables for new game
+  Level=1;
+  foodPlaced=false;
+  badFoodFlag = false;
+  speed=100;
+  redFood=0;
+  snakeLength = 2;
+  snakeDir = 3;
+  goodFoodEaten = 0;
   // Show Game over
   tft.fillScreen(ILI9341_BLACK);
+  // Draw a red border around the entire screen 
+  tft.drawRect(0, 0, tft.width()-20, tft.height(), ILI9341_RED);
   tft.setCursor(90, 70);
   tft.setTextColor(ILI9341_RED);
   tft.setTextSize(5);
@@ -234,25 +255,24 @@ void gameOver(void) {
   tft.setTextSize(5);
   tft.println("OVER");
 
-  if(score>EEPROM.get(HS_Add,highScore)){
-    EEPROM.put(HS_Add,score);
-  }
 }
 void showHighscore(){
   int highScore;
   int cursor; 
   EEPROM.get(HS_Add,highScore);
   tft.fillScreen(ILI9341_BLACK);
+      // Draw a red border around the entire screen 
+  tft.drawRect(0, 0, tft.width()-20, tft.height(), ILI9341_RED);
     // Set the text properties for the "High Score" label
   tft.setTextColor(ILI9341_WHITE);  // White color for the label
   tft.setTextSize(4);               // Set text size
-  tft.setCursor(40, 80);            // Set position for "High Score" label
+  tft.setCursor(35, 80);            // Set position for "High Score" label
   tft.println("High Score");
   if(highScore>99){
-    cursor = 120;
+    cursor = 115;
   }else if((highScore <= 99) && (highScore>9)){
-    cursor = 135;
-  }else cursor = 150;
+    cursor = 130;
+  }else cursor = 145;
   // Set the text properties for the actual score (in red)
   tft.setTextColor(ILI9341_RED);    // Red color for the score
   tft.setTextSize(4);               // Set text size
@@ -291,6 +311,10 @@ void levelCheck(void){
   if(goodFoodEaten==2){
     Level++;
     goodFoodEaten=0;
+    if(Level==2){
+      shiftSnake();
+      drawBarrier();
+    }
     if(Level>=4){
       redFood++;
       red= redFood; // number of red foods for the level
@@ -346,7 +370,7 @@ void spawnFood(void) {
     bool isInScoreArea = (foodX >= 200 && foodX <= 300 && foodY >= 0 && foodY <= 20);
 
     // check if food is placed on or near the barrier
-    bool onBarrier = false;
+    bool onBarrier = ((foodX >= 90) && (foodX <= 200) && (foodY >= 40) && (foodY <= 180));
     
     // Place food, if it's not on the snake's head, not in the score area, and not on the barrier
     if ((!isOnHead) && (!isInScoreArea) && (Level==1)) {
@@ -391,9 +415,46 @@ void checkCollision(void) {
   for (int i = 1; i < snakeLength; i++) {
     if (snakeX[0] == snakeX[i] && snakeY[0] == snakeY[i]) {
       gameEnded=true;
-      gameOver();
     }
   }
   // check if snake head hits the barrier
-
+  if(Level>=2){
+    if ((snakeX[0] >= 110) && (snakeX[0] <= 170) && (snakeY[0] >= 60) && (snakeY[0] <= 160)) {
+      gameEnded=true;
+    }
+  }
 } // edit after adding the barrier
+void drawBarrier() {
+    // Loop to draw multiple rectangles inside each other
+  for (int i = 0; i < 10; i++) {
+    tft.drawRoundRect(110 + i, 60 + i, 70 -  2* i, 100 - 2 * i, 20 - 2*i, ILI9341_RED);
+    tft.drawLine(117+i/2, 145+i, 167+i/2, 65+i, ILI9341_RED);  // From bottom-left to top-right
+  }
+}
+void shiftSnake(){
+  if ((snakeX[0] >= 100) && (snakeX[0] <= 190) && (snakeY[0] >= 50) && (snakeY[0] <= 170)) {
+    // If snake is inside the '0' shape, move it outside
+    // Clear the old snake from the screen by drawing over it with the background color
+    for (int i = 0; i < snakeLength; i++) {
+      tft.fillRect(snakeX[i], snakeY[i], 10, 10, ILI9341_BLACK);  // Black color to erase
+    }
+    snakeX[0] = 50;  // Move snake to a safe position
+    snakeY[0] = 220;
+  // Re-initialize the body to follow the head in a straight line
+    for (int i = 1; i < snakeLength; i++) {
+      // Position each body part directly behind the head
+      if(snakeX[i-1]<=0){
+        snakeX[i] = screenWidth - 10;
+      }else {
+        snakeX[i] = snakeX[i - 1] - 10;
+      }
+      snakeY[i] = snakeY[0];
+
+      // Handle screen wrapping for the body
+      if (snakeX[i] < 0) {
+        snakeX[i] = screenWidth - 10;  // Wrap around horizontally
+      }
+    drawSnake();
+    }
+  }
+} // shift the snake and draw the barrier
