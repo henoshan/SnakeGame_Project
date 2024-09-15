@@ -62,9 +62,10 @@ void showHighscore();
 void levelCheck();
 void checkFoodTimeout();
 void displayCountdown(int timeLeft);
-// test
 void shiftSnake();
 void drawBarrier();
+void checkCountdown();
+void resetGameVariables();
 
 void setup() {
   Serial.begin(9600);  // Start serial communication
@@ -227,20 +228,24 @@ void displayScore(void) {
   tft.print("Score ");
   tft.print(score);
 }
+void resetGameVariables() {
+  // reset game variables for new game
+  score = 0;
+  Level = 1;
+  foodPlaced = false;
+  badFoodFlag = false;
+  speed = 100;
+  redFood = 0;
+  snakeLength = 2;
+  snakeDir = 3;
+  goodFoodEaten = 0;
+}
 void gameOver(void) {
   int highScore;
   if(score > EEPROM.get(HS_Add,highScore)){ // update highscore to EEPROM
     EEPROM.put(HS_Add,score);
   }
-  score=0;  // reset game variables for new game
-  Level=1;
-  foodPlaced=false;
-  badFoodFlag = false;
-  speed=100;
-  redFood=0;
-  snakeLength = 2;
-  snakeDir = 3;
-  goodFoodEaten = 0;
+  resetGameVariables();  // reset all game variables
   // Show Game over
   tft.fillScreen(ILI9341_BLACK);
   // Draw a red border around the entire screen 
@@ -290,8 +295,49 @@ void displayCountdown(int timeLeft) {
   tft.setCursor(0, 0);  // Position the countdown in the corner
   tft.print(timeLeft);
 }
+void drawBarrier() {
+    // Loop to draw multiple rectangles inside each other
+  for (int i = 0; i < 10; i++) {
+    tft.drawRoundRect(110 + i, 60 + i, 70 -  2* i, 100 - 2 * i, 20 - 2*i, ILI9341_RED);
+    tft.drawLine(117+i/2, 145+i, 167+i/2, 65+i, ILI9341_RED);  // From bottom-left to top-right
+  }
+}
+void shiftSnake(){
+  if ((snakeX[0] >= 100) && (snakeX[0] <= 190) && (snakeY[0] >= 50) && (snakeY[0] <= 170)) {
+    // If snake is inside the '0' shape, move it outside
+    // Clear the old snake from the screen by drawing over it with the background color
+    for (int i = 0; i < snakeLength; i++) {
+      tft.fillRect(snakeX[i], snakeY[i], 10, 10, ILI9341_BLACK);  // Black color to erase
+    }
+    snakeX[0] = 50;  // Move snake to a safe position
+    snakeY[0] = 220;
+  // Re-initialize the body to follow the head in a straight line
+    for (int i = 1; i < snakeLength; i++) {
+       // Place each segment behind the previous one
+      snakeX[i] = snakeX[i - 1] - 10;
+      snakeY[i] = snakeY[0];  // Keep the Y coordinate same for horizontal placement
 
-// no editing needed for now//
+      // Handle screen wrapping for the body (horizontally only)
+      if (snakeX[i] < 0) {
+        snakeX[i] = screenWidth - 10;
+      }
+    }
+    drawSnake();
+  }
+} // shift the snake and draw the barrier
+void checkCountdown(){
+  // Check if 5 seconds have passed since the food was spawned (red and green)
+  if ((millis() - foodSpawnTime >= foodTimeout) && (Level>=3) && (foodPlaced)) {   //  && (foodPlaced)
+    clearFood();  // Remove the current food
+    delay(10); // for avoiding scorecard misbehaviour
+    badFoodFlag=false;  // clear flag when bad food dissappears
+    spawnFood();  // Spawn new food
+  }
+  int time = (maxCountTime-(millis()-foodSpawnTime)/1000);
+  if((Level>=3) && (foodPlaced)){  // display the countown for 5s from level3
+    displayCountdown(time);
+  }
+}
 void drawFood(void){
   // until level 4 good food
   if(Level<4){
@@ -306,7 +352,26 @@ void drawFood(void){
       tft.fillRect(foodX, foodY, 10, 10, ILI9341_GREEN); //goodfood
     }
   }
-} 
+}
+// need editing//
+void newGame(){
+  tft.fillScreen(ILI9341_BLACK);
+  for (int i = 0; i < snakeLength; i++) {
+    snakeX[i] = screenWidth / 2 - i * 10;
+    snakeY[i] = screenHeight / 2;
+  }
+  spawnFood();
+  displayScore();
+
+  while(!gameEnded && (snakeLength>0) && (score>=0)){
+    readJoystick();
+    moveSnake();
+    checkCollision();
+    checkCountdown();
+    delay(speed); // Controls speed
+  }
+  gameOver();
+}
 void levelCheck(void){
   if(goodFoodEaten==2){
     Level++;
@@ -325,37 +390,6 @@ void levelCheck(void){
     //   speed-=10;
     // }
   }
-}
-
-// need editing//
-void newGame(){
-  tft.fillScreen(ILI9341_BLACK);
-  for (int i = 0; i < snakeLength; i++) {
-    snakeX[i] = screenWidth / 2 - i * 10;
-    snakeY[i] = screenHeight / 2;
-  }
-  spawnFood();
-  displayScore();
-
-  while(!gameEnded && (snakeLength>0) && (score>=0)){
-    readJoystick();
-    moveSnake();
-    checkCollision();
-    levelCheck();
-    // Check if 5 seconds have passed since the food was spawned (red and green)
-    if ((millis() - foodSpawnTime >= foodTimeout) && (Level>=3) && (foodPlaced)) {   //  && (foodPlaced)
-      clearFood();  // Remove the current food
-      delay(10); // for avoiding scorecard misbehaviour
-      badFoodFlag=false;  // clear flag when bad food dissappears
-      spawnFood();  // Spawn new food
-    }
-    if((Level>=3) && (foodPlaced)){  // display the countown for 5s from level3
-      displayCountdown((maxCountTime-(millis()-foodSpawnTime)/1000));
-    }
-
-    delay(speed); // Controls speed
-  }
-  gameOver();
 }
 void spawnFood(void) {  
   while (!foodPlaced) {
@@ -400,16 +434,15 @@ void checkCollision(void) {
       clearFood();  // Remove the current food
       foodSpawnTime=0;
       badFoodFlag=false;
-      spawnFood(); // Spawn new food
     }else{
       snakeLength++;// Increase snake length
       score++; // Increase score
       displayScore();
       clearFood();  // Remove the current food
-  
       goodFoodEaten++; // increase good food eaten flag
-      spawnFood(); // Spawn new food
     }
+    levelCheck();
+    spawnFood(); // Spawn new food
   }
   // Check if the snake eats itself
   for (int i = 1; i < snakeLength; i++) {
@@ -419,42 +452,8 @@ void checkCollision(void) {
   }
   // check if snake head hits the barrier
   if(Level>=2){
-    if ((snakeX[0] >= 110) && (snakeX[0] <= 170) && (snakeY[0] >= 60) && (snakeY[0] <= 160)) {
+    if ((snakeX[0] >= 110) && (snakeX[0] <= 170) && (snakeY[0] >= 60) && (snakeY[0] <= 150)) {
       gameEnded=true;
     }
   }
 } // edit after adding the barrier
-void drawBarrier() {
-    // Loop to draw multiple rectangles inside each other
-  for (int i = 0; i < 10; i++) {
-    tft.drawRoundRect(110 + i, 60 + i, 70 -  2* i, 100 - 2 * i, 20 - 2*i, ILI9341_RED);
-    tft.drawLine(117+i/2, 145+i, 167+i/2, 65+i, ILI9341_RED);  // From bottom-left to top-right
-  }
-}
-void shiftSnake(){
-  if ((snakeX[0] >= 100) && (snakeX[0] <= 190) && (snakeY[0] >= 50) && (snakeY[0] <= 170)) {
-    // If snake is inside the '0' shape, move it outside
-    // Clear the old snake from the screen by drawing over it with the background color
-    for (int i = 0; i < snakeLength; i++) {
-      tft.fillRect(snakeX[i], snakeY[i], 10, 10, ILI9341_BLACK);  // Black color to erase
-    }
-    snakeX[0] = 50;  // Move snake to a safe position
-    snakeY[0] = 220;
-  // Re-initialize the body to follow the head in a straight line
-    for (int i = 1; i < snakeLength; i++) {
-      // Position each body part directly behind the head
-      if(snakeX[i-1]<=0){
-        snakeX[i] = screenWidth - 10;
-      }else {
-        snakeX[i] = snakeX[i - 1] - 10;
-      }
-      snakeY[i] = snakeY[0];
-
-      // Handle screen wrapping for the body
-      if (snakeX[i] < 0) {
-        snakeX[i] = screenWidth - 10;  // Wrap around horizontally
-      }
-    drawSnake();
-    }
-  }
-} // shift the snake and draw the barrier
