@@ -229,7 +229,7 @@ void spawnFood(void) {
     }else if ((!isOnHead) && (!isInScoreArea) && (!onBarrier) && (Level>1)){
       //foodPlaced 
       drawFood();
-      foodSpawnTime = millis(); // condition is checked only igf Level>=3
+      foodSpawnTime = millis(); // condition is checked only if Level>=3
       foodPlaced = true;
     }
   }
